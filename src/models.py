@@ -36,6 +36,13 @@ class BuildingOrder:
 
 
 @dataclass(frozen=True)
+class QueuePlan:
+    actions: tuple[Building, ...]
+    reserved_resources: ResourceMap = field(default_factory=dict)
+    reason: str = "ready"
+
+
+@dataclass(frozen=True)
 class FarmTown:
     farm_town_id: int
     name: str
@@ -52,6 +59,17 @@ class FarmTownRelation:
     lootable_at: int | None
     last_looted_at: int | None
     loot: float = 0.0
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class BanditTarget:
+    target_id: int
+    level: int
+    cooldown_duration: int | None
+    cooldown_at: int | None
+    reward_available: bool
+    reward: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -77,6 +95,7 @@ class ScheduledTask:
     attempts: int = 0
     last_error: str | None = None
     last_confirmed_at: int | None = None
+    phase: int = 0
 
 
 @dataclass(frozen=True)

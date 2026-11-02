@@ -1,4 +1,5 @@
 from src.logging_config import redact
+from src.game_api import CaptchaRequiredError
 from src.main import Bot
 from src.models import BuildingOrder, FarmTownRelation, ScheduledTask
 from src.retry import RetryPolicy
@@ -14,6 +15,17 @@ def test_retry_limit_is_bounded():
     assert policy.can_retry(0)
     assert policy.can_retry(1)
     assert not policy.can_retry(2)
+
+
+def test_http_200_with_false_success_is_not_action_success():
+    assert Bot._action_succeeded({"success": "1"})
+    assert Bot._action_succeeded({"success": "success"})
+    assert not Bot._action_succeeded({"success": "0"})
+    assert not Bot._action_succeeded({"success": False})
+
+
+def test_captcha_error_is_explicit():
+    assert issubclass(CaptchaRequiredError, RuntimeError)
 
 
 def test_ambiguous_construction_reconciles_from_server_queue():

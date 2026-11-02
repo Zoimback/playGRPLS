@@ -15,6 +15,10 @@ class AmbiguousMutationError(RuntimeError):
     """The server may have applied a mutation before the connection failed."""
 
 
+class CaptchaRequiredError(RuntimeError):
+    """Grepolis requires manual CAPTCHA completion before more collections."""
+
+
 def build_building_payload(building_id: str, town_id: int) -> dict[str, Any]:
     return {
         "building_id": building_id,
@@ -111,6 +115,7 @@ class GameAPI:
         body = data.get("json", data)
         if not isinstance(body, dict) or "success" not in body:
             raise ValueError("Build response lacks success")
+        logger.info("Construction result: success=%s", body.get("success"))
         return body
 
     def get_farm_town_data(self) -> dict[str, Any]:
@@ -142,4 +147,7 @@ class GameAPI:
         body = data.get("json", data)
         if not isinstance(body, dict) or "success" not in body:
             raise ValueError("Farm response lacks success")
+        logger.info("Farm result: success=%s", body.get("success"))
+        if "captcha" in str(body.get("success", "")).casefold():
+            raise CaptchaRequiredError("Grepolis requires manual CAPTCHA completion")
         return body

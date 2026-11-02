@@ -43,6 +43,8 @@ class Scheduler:
         task = self.tasks[task_id]
         task.status = "succeeded"
         task.last_confirmed_at = self.clock()
+        if task.kind == "farm_collection":
+            task.phase = 1 - task.phase
         if next_run_at is not None:
             task.run_at = next_run_at
             task.status = "pending"

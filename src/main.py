@@ -10,7 +10,7 @@ from typing import Any
 from .config import settings
 from .construction import plan_construction
 from .farm_towns import evaluate_farm_towns
-from .game_api import AmbiguousMutationError, GameAPI
+from .game_api import AmbiguousMutationError, CaptchaRequiredError, GameAPI
 from .logging_config import configure_logging, logger
 from .models import ScheduledTask
 from .platform_scheduler import install as install_platform_scheduler
@@ -43,6 +43,11 @@ class Bot:
             result["farms"] = {"success": False, "error": str(exc)}
         return result
 
+    @staticmethod
+    def _action_succeeded(response: dict[str, Any]) -> bool:
+        value = response.get("success")
+        return value is True or str(value).casefold() in {"1", "true", "success", "ok"}
+
     def ensure_tasks(self, now: int) -> None:
         if self.scheduler is None:
             return
@@ -65,7 +70,16 @@ class Bot:
             logger.info("Starting task %s", task.task_id)
             self.scheduler.start(task.task_id)
             try:
-                result = self.run_construction(now) if task.kind == "construction" else self.run_farms(now)
+                farm_interval = (
+                    self.settings.farm_short_interval_seconds
+                    if task.phase == 0
+                    else self.settings.farm_long_interval_seconds
+                )
+                result = (
+                    self.run_construction(now)
+                    if task.kind == "construction"
+                    else self.run_farms(now, interval_seconds=farm_interval)
+                )
                 next_run = result.get("next_run_at", now + self.settings.farm_interval_seconds)
                 self.scheduler.complete(task.task_id, int(next_run))
             except AmbiguousMutationError as exc:
@@ -95,9 +109,13 @@ class Bot:
         if plan.action is None:
             return {"success": True, "reason": plan.reason, "next_run_at": plan.next_run_at}
         response = self.api.build_building(plan.action.building_id, snapshot.town_id)
-        return {"success": True, "reason": plan.reason, "building_id": plan.action.building_id, "response": response, "next_run_at": now + int(response.get("next_fetch_in", self.settings.construction_margin_seconds))}
+        succeeded = self._action_succeeded(response)
+        if not succeeded:
+            logger.warning("Construction rejected: success=%s notifications=%s", response.get("success"), response.get("notifications"))
+        return {"success": succeeded, "reason": plan.reason, "building_id": plan.action.building_id, "response": response, "next_run_at": now + int(response.get("next_fetch_in", self.settings.construction_margin_seconds))}
 
-    def run_farms(self, now: int) -> dict[str, Any]:
+    def run_farms(self, now: int, interval_seconds: int | None = None) -> dict[str, Any]:
+        interval = self.settings.farm_interval_seconds if interval_seconds is None else interval_seconds
         response = self.api.get_farm_town_data()
         configured_ids = set(self.settings.farm_town_ids)
         if not configured_ids:
@@ -106,18 +124,43 @@ class Bot:
         logger.info("Farm state: configured=%s eligible=%s unavailable=%s", sorted(configured_ids), [status.farm_town.farm_town_id for status in statuses if status.eligible], [f"{status.farm_town.farm_town_id}:{status.reason}" for status in statuses if not status.eligible])
         successful, failed = [], []
         relations = {item.farm_town_id: item for item in self.api.get_farm_relations()}
-        for status in statuses:
+        captcha_required = False
+        for index, status in enumerate(statuses):
             if not status.eligible:
                 continue
             relation = relations.get(status.farm_town.farm_town_id)
             try:
                 relation_id = int(relation.raw["id"])
-                self.api.collect_farm_town(relation_id, status.farm_town.farm_town_id, self.settings.town_ids[0])
-                successful.append(status.farm_town.farm_town_id)
+                response = self.api.collect_farm_town(relation_id, status.farm_town.farm_town_id, self.settings.town_ids[0])
+                if self._action_succeeded(response):
+                    successful.append(status.farm_town.farm_town_id)
+                else:
+                    logger.warning("Farm collection rejected for %s: success=%s notifications=%s", status.farm_town.farm_town_id, response.get("success"), response.get("notifications"))
+                    failed.append(status.farm_town.farm_town_id)
+            except CaptchaRequiredError:
+                logger.error("Farm collections paused: solve CAPTCHA manually before retrying")
+                failed.extend(
+                    item.farm_town.farm_town_id
+                    for item in statuses[index:]
+                    if item.eligible
+                )
+                captcha_required = True
+                break
             except (KeyError, RuntimeError, ValueError, OSError):
                 logger.exception("Farm collection failed for %s", status.farm_town.farm_town_id)
                 failed.append(status.farm_town.farm_town_id)
-        return {"success": True, "configured": sorted(configured_ids), "successful": successful, "failed": failed, "next_run_at": now + self.settings.farm_interval_seconds}
+        future_availability = [
+            status.relation.lootable_at
+            for status in statuses
+            if status.relation is not None
+            and status.relation.lootable_at is not None
+            and status.relation.lootable_at > now
+        ]
+        next_run_at = now + (86400 if captcha_required else interval)
+        if future_availability:
+            next_run_at = max(next_run_at, min(future_availability))
+        logger.info("Next farm collection check: %s", next_run_at)
+        return {"success": not failed, "captcha_required": captcha_required, "configured": sorted(configured_ids), "successful": successful, "failed": failed, "next_run_at": next_run_at}
 
 
 def main() -> int:

@@ -56,3 +56,12 @@ def test_scheduler_isolates_failed_task(tmp_path: Path, fake_clock):
     scheduler.schedule(ScheduledTask("farm:1", "farm_collection", 1, fake_clock.value))
     scheduler.fail("construction:1", "network", next_run_at=fake_clock.value + 30)
     assert scheduler.tasks["farm:1"].status == "pending"
+
+    def test_farm_task_phase_alternates_and_persists(tmp_path, fake_clock):
+        store = StateStore(tmp_path / "state.json")
+        scheduler = Scheduler(store, clock=fake_clock)
+        scheduler.schedule(ScheduledTask("farms", "farm_collection", 0, fake_clock.value))
+        scheduler.complete("farms", next_run_at=fake_clock.value + 1200)
+        restored = Scheduler(store, clock=fake_clock)
+        assert restored.tasks["farms"].phase == 1
+        assert restored.tasks["farms"].run_at == fake_clock.value + 1200

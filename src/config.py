@@ -50,20 +50,30 @@ class Settings:
     player_id: int = int(os.getenv("GREEPOLIS_PLAYER_ID", "0") or 0)
     dry_run: bool = _bool(os.getenv("DRY_RUN", "true"))
     farm_interval_seconds: int = int(os.getenv("FARM_INTERVAL_SECONDS", "300"))
+    farm_short_interval_seconds: int = int(os.getenv("FARM_SHORT_INTERVAL_SECONDS", "1200"))
+    farm_long_interval_seconds: int = int(os.getenv("FARM_LONG_INTERVAL_SECONDS", "5400"))
     construction_margin_seconds: int = int(os.getenv("CONSTRUCTION_MARGIN_SECONDS", os.getenv("SCHEDULER_MARGIN_SECONDS", "60")))
     retry_limit: int = int(os.getenv("RETRY_LIMIT", "3"))
     request_timeout: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
+    queue_capacity: int = int(os.getenv("CONSTRUCTION_QUEUE_CAPACITY", "2"))
+    battle_safety_threshold: float = float(os.getenv("BATTLE_SAFETY_THRESHOLD", "1.0"))
     state_path: Path = Path(os.getenv("STATE_PATH", "data/state.json"))
 
     def validate(self) -> None:
         if self.farm_interval_seconds <= 0:
             raise ValueError("FARM_INTERVAL_SECONDS must be positive")
+        if self.farm_short_interval_seconds <= 0 or self.farm_long_interval_seconds <= 0:
+            raise ValueError("Farm alternation intervals must be positive")
         if self.construction_margin_seconds < 0:
             raise ValueError("CONSTRUCTION_MARGIN_SECONDS cannot be negative")
         if self.retry_limit < 0:
             raise ValueError("RETRY_LIMIT cannot be negative")
         if self.request_timeout <= 0:
             raise ValueError("REQUEST_TIMEOUT must be positive")
+        if self.queue_capacity <= 0:
+            raise ValueError("CONSTRUCTION_QUEUE_CAPACITY must be positive")
+        if not 0 <= self.battle_safety_threshold <= 1:
+            raise ValueError("BATTLE_SAFETY_THRESHOLD must be between 0 and 1")
         if self.dry_run is False and (not self.username or not self.password):
             raise ValueError("Credentials are required when DRY_RUN is false")
 

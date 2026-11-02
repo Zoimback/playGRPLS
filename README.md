@@ -47,5 +47,6 @@ python -m src.main --logs
 ```
 
 Los logs muestran login, peticiones, cola, decision de edificio y motivo por el que cada aldea espera. No muestran cookies ni CSRF.
+`data/scheduler.log` se reinicia al primer arranque de cada dia y conserva las ejecuciones del mismo dia.
 
 Especificacion: `specs/003-grepolis-autonomous-bot/`.
