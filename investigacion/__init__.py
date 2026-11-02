@@ -1,0 +1,1 @@
+"""Herramientas de investigacion offline y de solo lectura para Grepolis."""

@@ -1,0 +1,18 @@
+{
+  "backbone": {
+    "models": [
+      {
+        "model_class_name": "Town",
+        "data": {
+          "resources": {"wood": 100, "stone": 200, "iron": 300},
+          "production": {"wood": 10, "stone": 20, "iron": 30},
+          "population": {"max": 500, "blocked": 100}
+        }
+      },
+      {
+        "model_class_name": "BuildingOrders",
+        "data": [{"d": {"id": 7, "building_type": "main"}}]
+      }
+    ]
+  }
+}

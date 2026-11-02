@@ -1,0 +1,9 @@
+investigacion/data/
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+data/
+.coverage
+grepolis_profile/
